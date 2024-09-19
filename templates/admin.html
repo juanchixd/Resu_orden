@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="../static/css/styles.css" />
+    <link
+      rel="icon"
+      href="{{ url_for('static', filename='favicon.ico') }}"
+      type="image/x-icon"
+    />
+    <title>Resu - Panel</title>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Panel de control</h1>
+      <form action="{{ url_for('admin_panel') }}" method="post">
+        <div class="form-group">
+          <label for="redirect_url">URL:</label>
+          <input
+            type="url"
+            id="redirect_url"
+            name="redirect_url"
+            value="{{ current_url }}"
+            required
+          />
+        </div>
+        <button type="submit">Actualizar</button>
+      </form>
+      {% with messages = get_flashed_messages() %} {% if messages %}
+      <ul class="flash-messages">
+        {% for message in messages %}
+        <li>{{ message }}</li>
+        {% endfor %}
+      </ul>
+      {% endif %} {% endwith %}
+      <h3>Contador de visitas: {{ visit_count }}</h3>
+
+      <a href="{{ url_for('logout') }}">Cerrar sesión</a>
+      <button id="openModalBtn">Mostrar QR</button>
+      <div id="qrModal" class="modal">
+        <div class="modal-content">
+          <span class="close">&times;</span>
+          <div class="modal-body text-center">
+            <img
+              id="qrCodeImage"
+              src="/qr_code"
+              alt="QR Code"
+              class="img-fluid"
+            />
+            <a
+              id="downloadQrCode"
+              href="/qr_code"
+              download="qr_code.png"
+              class="btn btn-primary mt-3"
+              >Descargar Código QR</a
+            >
+          </div>
+        </div>
+      </div>
+    </div>
+    <script>
+      // Obtener elementos del DOM
+      var modal = document.getElementById("qrModal");
+      var btn = document.getElementById("openModalBtn");
+      var span = document.getElementsByClassName("close")[0];
+
+      // Cuando se haga clic en el botón, se abre el modal
+      btn.onclick = function () {
+        modal.style.display = "block";
+      };
+
+      // Cuando se haga clic en la 'X', se cierra el modal
+      span.onclick = function () {
+        modal.style.display = "none";
+      };
+
+      // Cuando el usuario haga clic fuera del modal, también se cierra
+      window.onclick = function (event) {
+        if (event.target == modal) {
+          modal.style.display = "none";
+        }
+      };
+    </script>
+  </body>
+</html>
