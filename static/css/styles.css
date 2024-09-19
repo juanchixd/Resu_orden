@@ -87,6 +87,10 @@ button:hover {
     max-width: 500px;
 }
 
+.modal-dialog {
+    max-width: 500px;
+}
+
 .close {
     color: #aaa;
     float: right;

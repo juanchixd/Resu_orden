@@ -188,6 +188,35 @@ def generate_qr():
     # Retornar la imagen como una respuesta de archivo
     return send_file(buffer, mimetype='image/png')
 
+
+@app.route('/gen_qr', methods=['GET', 'POST'])
+def generate_qr_url():
+    if request.method == 'POST':
+        link = request.form.get('link')
+        if link:
+            # Crear un objeto QRCode
+            qr = qrcode.QRCode(
+                version=1,
+                error_correction=qrcode.constants.ERROR_CORRECT_L,
+                box_size=10,
+                border=4,
+            )
+            qr.add_data(link)
+            qr.make(fit=True)
+
+            # Crear la imagen del código QR
+            img = qr.make_image(fill='black', back_color='white')
+
+            # Guardar la imagen en un buffer de memoria
+            buffer = io.BytesIO()
+            img.save(buffer)
+            buffer.seek(0)
+
+            # Retornar la imagen como respuesta
+            return send_file(buffer, mimetype='image/png')
+    return render_template('generate_qr.html')
+
+
 # Ruta para cerrar sesión
 
 
