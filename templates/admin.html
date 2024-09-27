@@ -27,6 +27,15 @@
         </div>
         <button type="submit">Actualizar</button>
       </form>
+      <h3>Dividir y subir PDF a Google Drive</h3>
+      <form
+        method="POST"
+        action="/split_upload_drive"
+        enctype="multipart/form-data"
+      >
+        <input type="file" name="pdf" id="pdf" accept="application/pdf" />
+        <button type="submit">Subir PDF</button>
+      </form>
       {% with messages = get_flashed_messages() %} {% if messages %}
       <ul class="flash-messages">
         {% for message in messages %}
@@ -36,7 +45,6 @@
       {% endif %} {% endwith %}
       <h3>Contador de visitas: {{ visit_count }}</h3>
 
-      <a href="{{ url_for('logout') }}">Cerrar sesión</a>
       <button id="openModalBtn">Mostrar QR</button>
       <div id="qrModal" class="modal">
         <div class="modal-content">
@@ -57,6 +65,14 @@
             >
           </div>
         </div>
+      </div>
+      <div class="space">
+        <a href="{{ url_for('generate_qr_url')}}" class="btn btn-primary"
+          >Ir a generador de qr a partir de url</a
+        >
+      </div>
+      <div class="space">
+        <a href="{{ url_for('logout') }}">Cerrar sesión</a>
       </div>
     </div>
     <footer>

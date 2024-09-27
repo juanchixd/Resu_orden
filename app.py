@@ -12,8 +12,13 @@ import requests
 import bcrypt
 import qrcode
 import io
+import json
+import fitz
 from flask import Flask, render_template, redirect, url_for, request, session, flash, send_file
 from functools import wraps
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
 
 # Crear una instancia de Flask / Create a Flask instance
 app = Flask(__name__)
@@ -24,6 +29,9 @@ SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 NAME_TABLE_USERS = os.getenv("NAME_TABLE_USERS")
 NAME_TABLE_REDIRECT = os.getenv("NAME_TABLE_REDIRECT")
+FOLDER_ID = os.getenv('FOLDER_ID')
+SERVICE_ACCOUNT_JSON = os.getenv('SERVICE_ACCOUNT_FILE')
+SCOPES = ['https://www.googleapis.com/auth/drive.file']
 
 # El header para requests / The header for requests
 headers = {
@@ -217,9 +225,121 @@ def generate_qr_url():
     return render_template('generate_qr.html')
 
 
+def authenticate_google_service():
+    # Cargar las credenciales desde la variable de entorno
+    service_account_info = json.loads(SERVICE_ACCOUNT_JSON)
+    creds = service_account.Credentials.from_service_account_info(
+        service_account_info, scopes=SCOPES)
+    return creds
+
+
+def upload_file(file, filename):
+    # Subir a Google Drive directamente sin guardar el archivo
+    creds = authenticate_google_service()
+    drive_service = build('drive', 'v3', credentials=creds)
+
+    file_metadata = {
+        'name': filename,
+        'parents': [FOLDER_ID]
+    }
+
+    # Usar MediaIoBaseUpload para manejar flujos de bytes
+    media = MediaIoBaseUpload(io.BytesIO(file.read()),
+                              mimetype='application/pdf', resumable=True)
+
+    # Subir archivo
+    uploaded_file = drive_service.files().create(
+        body=file_metadata, media_body=media, fields='id').execute()
+
+    # Obtener el ID del archivo
+    file_id = uploaded_file.get('id')
+
+    # Hacer que el archivo sea público
+    permission = {
+        'role': 'reader',
+        'type': 'anyone',
+    }
+    drive_service.permissions().create(fileId=file_id, body=permission).execute()
+
+    # Obtener el enlace para compartir
+    shared_link = f"https://drive.google.com/file/d/{file_id}/view?usp=sharing"
+
+    return shared_link
+
+
+def split_and_reorder_pdf(input_pdf_stream, output_pdf_stream, order=None):
+    # Abre el PDF original desde el stream en memoria
+    doc = fitz.open(stream=input_pdf_stream, filetype="pdf")
+    output = fitz.open()  # Crea un nuevo PDF
+    split_pages = []  # Lista para almacenar las páginas recortadas
+
+    # Recorre todas las páginas del documento y divide en tres partes verticales
+    for page_num in range(len(doc)):
+        page = doc.load_page(page_num)
+        rect = page.rect
+        width = rect.width / 3
+
+        # Agrega las tres partes recortadas a la lista
+        split_pages.extend([(page_num, fitz.Rect(
+            i * width, 0, (i + 1) * width, rect.height)) for i in range(3)])
+
+     # Si no se proporciona un orden, usar el orden original
+    if order is None:
+        order = list(range(len(split_pages)))
+
+    # Guardar las páginas reorganizadas en el archivo de salida
+    for i in order:
+        page_num, sub_rect = split_pages[i]
+        page = doc.load_page(page_num)
+        new_page = output.new_page(
+            width=sub_rect.width, height=sub_rect.height)
+        new_page.show_pdf_page(new_page.rect, doc, page_num, clip=sub_rect)
+
+    # Guardar el PDF en el stream de salida
+    output.save(output_pdf_stream)
+    output.close()
+
+
+@app.route('/split_upload_drive', methods=['GET', 'POST'])
+@login_required
+def split_upload_drive():
+    if request.method == 'POST':
+        # Obtener el archivo PDF subido
+        pdf_file = request.files['pdf']
+
+        # Obtener el nombre del archivo original
+        original_filename = pdf_file.filename
+        base_name, _ = original_filename.rsplit(
+            '.', 1)  # Obtener el nombre sin la extensión
+
+        # Buffer para el archivo PDF resultante en memoria
+        output_pdf_buffer = io.BytesIO()
+
+        # Dividir las páginas del PDF y reordenarlas
+        split_and_reorder_pdf(
+            pdf_file.read(), output_pdf_buffer, order=[2, 3, 4, 5, 0, 1])
+
+        # Enviar el archivo resultante al usuario
+        output_pdf_buffer.seek(0)
+
+        shared_link = upload_file(output_pdf_buffer, f'{base_name}.pdf')
+
+        # Actualizar la URL en Supabase
+        url = f'{SUPABASE_URL}/rest/v1/{NAME_TABLE_REDIRECT}?id=eq.1'
+        data = {
+            'redirect_url': shared_link
+        }
+        response = requests.patch(url, json=data, headers=headers)
+
+        if response.status_code == 204:
+            flash('URL actualizada con éxito.')
+        else:
+            flash('Error al actualizar la URL.')
+
+        return redirect(url_for('admin_panel'))
+
+
 # Ruta para cerrar sesión
-
-
 @app.route('/logout')
 def logout():
     session.pop('logged_in', None)
